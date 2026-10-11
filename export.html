@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wo möchte ich studieren? – PDF</title>
+    <!--
+      Druckansicht für die PDF.
+      So speicherst du die PDF selbst: Seite im Browser öffnen, kurz warten bis
+      die Karte da ist, dann Drucken (Cmd+P) → „Als PDF sichern“.
+      In der PDF sind die Pinnadeln anklickbar und springen zur Uni-Seite;
+      „Zur Uni-Website“ öffnet die Website.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400;1,500;1,600&family=Jost:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      @page { size: A4 landscape; margin: 0; }
+      html, body { height: auto; }
+      body { background: #e9e4e1; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+
+      .page {
+        position: relative;
+        width: 297mm;
+        height: 210mm;
+        margin: 0 auto 12px;
+        padding: 12mm 14mm 10mm;
+        overflow: hidden;
+        background: var(--bg);
+        break-after: page;
+        display: flex;
+        flex-direction: column;
+      }
+      @media print { body { background: none; } .page { margin: 0; } }
+
+      .page .title { margin-bottom: 6mm; }
+      .page .title h1 { font-size: 52px; }
+      .page__head { margin: 0 0 4mm; text-align: center; }
+      .page__head h2 {
+        margin: 0;
+        font-family: var(--serif);
+        font-style: italic;
+        font-weight: 500;
+        font-size: 36px;
+        color: var(--ink);
+      }
+
+      .pmap {
+        position: relative;
+        flex: 1;
+        border: 1px solid var(--pink);
+        border-radius: 18px;
+        overflow: hidden;
+        background: var(--bg);
+      }
+      .pmap svg.base { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .ppin { position: absolute; width: 28px; height: 38px; margin: -34px 0 0 -14px; display: block; }
+      .ppin svg { width: 28px; height: 38px; overflow: visible; }
+      .pmap__note {
+        position: absolute; right: 14px; bottom: 10px; margin: 0;
+        font-size: 12px; color: var(--muted);
+      }
+      .pmap__zoom {
+        position: absolute; left: 14px; bottom: 10px;
+        font-size: 12px; color: var(--ink); text-decoration: none;
+        border: 1px solid var(--rose); border-radius: 999px; padding: 4px 10px; background: #fffaf7cc;
+      }
+
+      /* Uni-Seiten */
+      .uni { flex-direction: row; gap: 12mm; align-items: stretch; }
+      .uni__img {
+        flex: 1.2;
+        min-width: 0;
+        align-self: center;
+        aspect-ratio: 16 / 9;
+        border-radius: 18px;
+        border: 1px solid var(--pink);
+        background: var(--sage) center / cover no-repeat;
+      }
+      .uni__body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+      .uni__place { margin: 0 0 4px; color: var(--ink); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; }
+      .uni__body .card__name { font-size: 40px; margin-bottom: 8mm; }
+      .uni__body .card__facts { margin-bottom: 8mm; }
+      .uni__body .card__fact { padding: 9px 0; font-size: 16px; }
+      .uni__nav { display: flex; gap: 10px; margin-top: 8mm; }
+      .uni__nav a { font-size: 13px; color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--rose); }
+    </style>
+  </head>
+  <body>
+    <div id="pages"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+    <script src="unis.js"></script>
+    <script>
+      (async function () {
+        "use strict";
+        const WORLD_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json";
+        const OPEN = "noch offen";
+        // Länderkürzel (ISO 3166) zu den Ländercodes der Weltkarte – wie in app.js
+        const ISO2 = {
+          "040": "AT", "036": "AU", "056": "BE", "076": "BR", "124": "CA", "756": "CH", "152": "CL",
+          "156": "CN", "203": "CZ", "276": "DE", "208": "DK", "724": "ES", "246": "FI", "250": "FR",
+          "826": "GB", "300": "GR", "348": "HU", "372": "IE", "380": "IT", "392": "JP", "410": "KR",
+          "484": "MX", "528": "NL", "578": "NO", "554": "NZ", "616": "PL", "620": "PT", "752": "SE",
+          "702": "SG", "792": "TR", "840": "US",
+        };
+        const PIN = "M0 0C-1.5-6-10-11-10-19A10 10 0 1 1 10-19C10-11 1.5-6 0 0Z";
+        const pages = document.getElementById("pages");
+
+        const missing = (v) => v === null || v === undefined || v === "";
+        const ok = (v, lim) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= lim;
+        const unis = (window.UNIS || []).filter((u, i) => {
+          const valid = u && ok(u.lat, 90) && ok(u.lng, 180);
+          if (!valid) console.warn(`Uni übersprungen – ungültige Koordinaten: ${(u && u.name) || "Eintrag Nr. " + (i + 1)}`);
+          return valid;
+        });
+        unis.forEach((u, i) => (u.anchor = `uni-${i + 1}`));
+        const countries = new Set(unis.map((u) => u.land).filter(Boolean));
+
+        function el(tag, attrs = {}, ...children) {
+          const node = document.createElement(tag);
+          for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+          node.append(...children);
+          return node;
+        }
+
+        function placeholderImage(u) {
+          const city = String(u.stadt || "").replace(/[<>&"]/g, "");
+          const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#f3dad8"/><stop offset="1" stop-color="#c0d6df"/></linearGradient></defs>
+            <rect width="640" height="360" fill="url(#g)"/>
+            <g fill="none" stroke="#294936" stroke-opacity=".35" stroke-width="1.5">
+              <path d="M120 300V150l80-60 80 60v150M280 300V110h120v190M400 300V170l60-40 60 40v130M80 300h480"/>
+              <path d="M150 300v-80h40v80M310 140h60M310 170h60M310 200h60M310 230h60M440 300v-60h40v60"/>
+            </g>
+            <text x="320" y="60" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="36" fill="#294936">${city}</text>
+          </svg>`;
+          return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText);
+        }
+
+        let land = null;
+        try {
+          const world = await (await fetch(WORLD_URL)).json();
+          land = topojson.feature(world, world.objects.countries);
+        } catch (err) {
+          console.error("Weltkarte konnte nicht geladen werden:", err);
+        }
+
+        // Ringe über die Datumsgrenze liefert geoArea manchmal "invertiert"
+        const area = (geo) => { const a = d3.geoArea(geo); return Math.min(a, 4 * Math.PI - a); };
+
+        // Partnerländer = Länder, in denen ein Pin liegt
+        const partners = [];
+        if (land) {
+          const seen = new Set();
+          unis.forEach((u) => {
+            const f = land.features.find((c) => d3.geoContains(c, [u.lng, u.lat]));
+            if (!f || seen.has(f.id)) return;
+            seen.add(f.id);
+            const polys = f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [f.geometry.coordinates];
+            const largest = polys
+              .map((coords) => ({ type: "Polygon", coordinates: coords }))
+              .sort((a, b) => area(b) - area(a))[0];
+            const center = d3.geoCentroid(largest);
+            const inside = d3.geoContains(largest, center);
+            partners.push({
+              f, largest,
+              anchor: inside ? center : [u.lng, u.lat], dy: inside ? 0 : 12,
+              code: ISO2[f.id] || String(u.land || "").slice(0, 2).toUpperCase(),
+            });
+          });
+        }
+
+        // Karte mit anklickbaren Pinnadeln; Pins, die zu nah liegen, werden aufgefächert
+        function mapBox(fitTo, list, extra) {
+          const box = el("div", { class: "pmap" });
+          // gerendert wird erst, wenn die Box im Dokument ist und eine Größe hat
+          box._render = () => {
+            const { width, height } = box.getBoundingClientRect();
+            const pad = 24;
+            const projection = d3.geoNaturalEarth1().fitExtent([[pad, pad + 20], [width - pad, height - pad]], fitTo);
+            const path = d3.geoPath(projection);
+            const svg = d3.select(box).append("svg").attr("class", "base").attr("viewBox", `0 0 ${width} ${height}`);
+            svg.append("path").attr("class", "map__sphere").attr("d", path({ type: "Sphere" }));
+            svg.append("path").attr("class", "map__graticule").attr("d", path(d3.geoGraticule10()));
+            if (land) {
+              svg.append("path").attr("class", "map__land").attr("d", path(land));
+              // Partnerländer hervorheben und mit Kürzel beschriften
+              partners.forEach(({ f }) => {
+                svg.append("path").attr("class", "map__land map__land--partner").attr("d", path(f));
+              });
+              partners.forEach(({ code, largest, anchor, dy }) => {
+                const [[x0], [x1]] = path.bounds(largest);
+                const pt = projection(anchor);
+                if (x1 - x0 < 26 || !pt) return;
+                svg.append("text").attr("class", "map__code").attr("x", pt[0]).attr("y", pt[1] + dy).text(code);
+              });
+            }
+
+            const pts = list.map((u) => projection([u.lng, u.lat]));
+            const clusters = [];
+            pts.forEach((p, i) => {
+              const near = clusters.find((c) => Math.hypot(c.x - p[0], c.y - p[1]) < 18);
+              if (near) {
+                near.m.push(i);
+                near.x = d3.mean(near.m, (m) => pts[m][0]);
+                near.y = d3.mean(near.m, (m) => pts[m][1]);
+              } else clusters.push({ x: p[0], y: p[1], m: [i] });
+            });
+            const pos = [];
+            clusters.forEach((c) => {
+              const n = c.m.length, r = n === 1 ? 0 : Math.max(14, (n * 26) / (2 * Math.PI));
+              c.m.forEach((m, k) => {
+                const a = (2 * Math.PI * k) / n - Math.PI / 2;
+                pos[m] = [c.x + r * Math.cos(a), c.y + r * Math.sin(a)];
+              });
+            });
+            list
+              .map((u, i) => ({ u, p: pos[i] }))
+              .sort((a, b) => a.p[1] - b.p[1])
+              .forEach(({ u, p }) => {
+                const a = el("a", { class: "ppin", href: `#${u.anchor}`, title: `${u.name} – ${u.stadt}` });
+                a.style.left = `${p[0]}px`;
+                a.style.top = `${p[1]}px`;
+                a.innerHTML = `<svg viewBox="-14 -34 28 38"><ellipse class="pin__shadow" rx="5" ry="2"/><path class="pin__head" d="${PIN}"/><circle class="pin__eye" cy="-19" r="4"/></svg>`;
+                box.append(a);
+              });
+            if (extra) box.append(extra);
+          };
+          return box;
+        }
+
+        // Seite 1: Weltkarte
+        const p1 = el("section", { class: "page", id: "welt" });
+        const header = el("header", { class: "title" },
+          el("h1", {}, "Wo möchte ich studieren?"),
+          el("p", { class: "title__sub" }, `Master Architektur · Auslandssemester · ${unis.length} Partner-Unis in ${countries.size} Ländern`));
+        const toEurope = el("a", { class: "pmap__zoom", href: "#europa" }, "Europa vergrößert →");
+        const m1 = mapBox({ type: "Sphere" }, unis, toEurope);
+        m1.append(el("p", { class: "pmap__note" }, "Tipp auf eine Pinnadel springt zur Uni"));
+        p1.append(header, m1);
+        pages.append(p1);
+
+        // Seite 2: Europa vergrößert
+        const europe = unis.filter((u) => u.lng > -25 && u.lng < 45 && u.lat > 34 && u.lat < 72);
+        let m2 = null;
+        if (europe.length) {
+          const p2 = el("section", { class: "page", id: "europa" });
+          p2.append(el("div", { class: "page__head" }, el("h2", {}, "Europa")));
+          m2 = mapBox({ type: "MultiPoint", coordinates: europe.map((u) => [u.lng, u.lat]) }, europe,
+            el("a", { class: "pmap__zoom", href: "#welt" }, "← Weltkarte"));
+          p2.append(m2);
+          pages.append(p2);
+        }
+
+        // Je Uni eine Seite
+        unis.forEach((u) => {
+          const page = el("section", { class: "page uni", id: u.anchor });
+          const img = el("div", { class: "uni__img", role: "img", "aria-label": u.name || "" });
+          img.style.backgroundImage = `url("${placeholderImage(u)}")`;
+          if (!missing(u.bild)) {
+            const probe = new Image();
+            probe.onload = () => (img.style.backgroundImage = `url("${encodeURI(u.bild)}")`);
+            probe.src = u.bild;
+          }
+          const place = [u.stadt, u.land].filter((v) => !missing(v)).join(", ");
+          const facts = [
+            ["Stadt, Land", place],
+            ["Plätze", missing(u.plaetze) ? null : `${u.plaetze} ${u.plaetze === 1 ? "Platz" : "Plätze"}`],
+            ["Monate (laut Liste)", missing(u.monate) ? null : `${u.monate} Monate`],
+            ["Unterrichtssprache", u.sprache],
+            ["Bewerbungsfrist", missing(u.frist) ? null : String(u.frist).split(" · ").join("\n")],
+          ];
+          const dl = el("dl", { class: "card__facts" },
+            ...facts.map(([label, value]) =>
+              el("div", { class: "card__fact" }, el("dt", {}, label),
+                el("dd", missing(value) ? { class: "is-open" } : {}, missing(value) ? OPEN : value))));
+          const link = typeof u.link === "string" && /^https?:\/\//i.test(u.link)
+            ? el("a", { class: "card__link", href: u.link, target: "_blank", rel: "noopener noreferrer" }, "Zur Uni-Website ↗")
+            : el("p", { class: "card__nolink" }, `Link ${OPEN}`);
+          const nav = el("nav", { class: "uni__nav" }, el("a", { href: "#welt" }, "← Weltkarte"));
+          if (europe.includes(u)) nav.append(el("a", { href: "#europa" }, "← Europa"));
+          page.append(img, el("div", { class: "uni__body" },
+            el("p", { class: "uni__place" }, place),
+            el("h2", { class: "card__name" }, missing(u.name) ? "Unbenannte Uni" : u.name),
+            dl, el("div", {}, link), nav));
+          pages.append(page);
+        });
+
+        m1._render();
+        if (m2) m2._render();
+        await document.fonts.ready;
+        document.body.dataset.ready = "1";
+      })();
+    </script>
+  </body>
+</html>

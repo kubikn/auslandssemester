@@ -1,0 +1,292 @@
+/* Grundpalette: https://coolors.co/palette/d8e2dc-ffe5d9-ffcad4-f4acb7-9d8189
+   Hintergrund, Wasser, Grenzen und Schrift nach Wunsch angepasst. */
+:root {
+  --bg: #f3dad8;
+  --water: #c0d6df;
+  --border: #d6d9ce;
+  --sage: #d8e2dc;
+  --peach: #ffe5d9;
+  --pink: #ffcad4;
+  --rose: #f4acb7;
+  --mauve: #9d8189;
+  --ink: #294936;
+  --muted: #4f6a5a;
+  --paper: #fffaf7;
+  --line: #9d818933;
+  --serif: "Cormorant Garamond", "Times New Roman", serif;
+  --sans: "Jost", "Avenir Next", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: max(20px, env(safe-area-inset-top)) 32px max(14px, env(safe-area-inset-bottom));
+}
+
+/* Rahmen um die Karte – darin liegen Karte, Knöpfe und Uni-Karte */
+.frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--pink);
+  border-radius: 24px;
+  box-shadow: 0 18px 48px #9d818926;
+}
+
+/* ── Karte ─────────────────────────────────────────── */
+.map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.map:active { cursor: grabbing; }
+
+/* Linienstärken werden durch den Zoom (--k) geteilt, damit sie gleich dünn
+   bleiben – schneller als vector-effect: non-scaling-stroke. */
+.map__sphere { fill: var(--water); stroke: var(--border); stroke-width: calc(1px / var(--k, 1)); }
+.map__graticule { fill: none; stroke: #ffffff; stroke-opacity: 0.35; stroke-width: calc(0.6px / var(--k, 1)); }
+.map__land { fill: var(--paper); stroke: var(--border); stroke-width: calc(0.8px / var(--k, 1)); stroke-linejoin: round; }
+.map__land--partner { fill: #f6d6d4; }
+
+.map__code {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* ── Pinnadeln ─────────────────────────────────────── */
+.pin { cursor: pointer; outline: none; }
+.pin__shadow { fill: var(--mauve); opacity: 0.35; }
+.pin__head {
+  fill: var(--rose);
+  stroke: var(--mauve);
+  stroke-width: 1.5px;
+  transition: fill 0.15s;
+}
+.pin__eye { fill: var(--paper); }
+.pin:hover .pin__head,
+.pin:focus-visible .pin__head { fill: var(--pink); }
+.pin:focus-visible .pin__head { stroke: var(--ink); stroke-width: 2px; }
+.pin[data-active] .pin__head { fill: var(--mauve); stroke: var(--ink); }
+
+/* ── Titel ─────────────────────────────────────────── */
+.title {
+  flex: none;
+  margin: 0 0 18px;
+  text-align: center;
+}
+.title h1 {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(38px, 6vw, 68px);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.title__sub {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--pink);
+  border-radius: 12px;
+}
+
+.hint {
+  flex: none;
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── Zoom-Knöpfe ───────────────────────────────────── */
+.controls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.control {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: var(--ink);
+  background: #fffaf7e0;
+  border: 1px solid var(--rose);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.control svg, .card__close svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.control:hover { border-color: var(--mauve); background: var(--pink); }
+.control:active { transform: scale(0.92); }
+.control:focus-visible, .card__close:focus-visible, .card__link:focus-visible {
+  outline: 2px solid var(--mauve);
+  outline-offset: 2px;
+}
+
+/* ── Uni-Karte ─────────────────────────────────────── */
+.card {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 360px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--pink);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px #9d818933;
+  animation: card-in 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.card[hidden] { display: none; }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.card__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink);
+  background: #fffaf7d9;
+  border: 1px solid var(--rose);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.card__img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 13px 13px 0 0;
+  background: var(--sage);
+}
+
+.card__body { padding: 14px 18px 18px; }
+.card__name {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 28px;
+  color: var(--ink);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.card__facts { margin: 0 0 16px; }
+.card__fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.card__fact dt { color: var(--muted); font-size: 13px; font-weight: 400; }
+.card__fact dd { margin: 0; text-align: right; white-space: pre-line; }
+.card__fact dd.is-open { color: var(--muted); font-style: italic; }
+
+.card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  color: var(--ink);
+  background: var(--rose);
+  border-radius: 999px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.card__link:hover { background: var(--pink); }
+.card__nolink { margin: 0; color: var(--muted); font-style: italic; }
+
+/* Handy: Karte als Blatt von unten */
+@media (max-width: 640px) {
+  .app { padding-left: 14px; padding-right: 14px; }
+  .title { margin-bottom: 12px; }
+  .title__sub { font-size: 11px; letter-spacing: 0.1em; }
+  .frame { border-radius: 18px; }
+  .card {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 80%;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+  }
+  .card__img { border-radius: 15px 15px 0 0; aspect-ratio: 2 / 1; }
+  .card__body { padding-bottom: 18px; }
+}
