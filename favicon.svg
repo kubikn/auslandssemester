@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App-Icon: Pinnadel auf Globus, Farben wie die Seite -->
+  <rect width="512" height="512" rx="112" fill="#F7EEED"/>
+  <g transform="translate(256 300)">
+    <circle r="158" fill="#C0D6DF"/>
+    <g fill="none" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="7">
+      <ellipse rx="68" ry="158"/>
+      <path d="M-158 0H158M-138 -78H138M-138 78H138"/>
+    </g>
+    <circle r="158" fill="none" stroke="#D6D9CE" stroke-width="6"/>
+  </g>
+  <ellipse cx="256" cy="344" rx="34" ry="11" fill="#294936" opacity="0.25"/>
+  <g transform="translate(256 340)">
+    <path d="M0 0C-10.8-43.2-80-82-80-140A80 80 0 1 1 80-140C80-82 10.8-43.2 0 0Z" fill="#F4ACB7" stroke="#9D8189" stroke-width="9" stroke-linejoin="round"/>
+    <circle cy="-140" r="34" fill="#FFFAF7"/>
+  </g>
+</svg>
