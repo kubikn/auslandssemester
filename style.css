@@ -72,20 +72,6 @@ html, body {
 .map__land { fill: var(--paper); stroke: var(--border); stroke-width: calc(0.8px / var(--k, 1)); stroke-linejoin: round; }
 .map__land--partner { fill: #f6d6d4; }
 
-.map__code {
-  font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  fill: var(--ink);
-  text-anchor: middle;
-  dominant-baseline: middle;
-  paint-order: stroke;
-  stroke: var(--paper);
-  stroke-width: 3px;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
 
 /* ── Pinnadeln ─────────────────────────────────────── */
 .pin { cursor: pointer; outline: none; }
@@ -97,6 +83,16 @@ html, body {
   transition: fill 0.15s;
 }
 .pin__eye { fill: var(--paper); }
+.pin__code {
+  font-family: var(--sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
 .pin:hover .pin__head,
 .pin:focus-visible .pin__head { fill: var(--pink); }
 .pin:focus-visible .pin__head { stroke: var(--ink); stroke-width: 2px; }

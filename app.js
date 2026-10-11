@@ -5,8 +5,7 @@
   const WORLD_COARSE = "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json";
   const WORLD_FINE = "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json";
   const FINE_FROM_ZOOM = 3;
-  const LABEL_MIN_WIDTH = 26; // Länderkürzel nur zeigen, wenn das Land so viele Pixel breit ist
-  const PIN_GAP = 18; // Pins, die näher als so viele Pixel liegen, werden aufgefächert
+  const PIN_GAP = 22; // Pins, die näher als so viele Pixel liegen, werden aufgefächert
   const OPEN = "noch offen";
 
   const status = document.getElementById("status");
@@ -55,7 +54,6 @@
   const sphere = root.append("path").attr("class", "map__sphere");
   const graticule = root.append("path").attr("class", "map__graticule");
   const landLayer = root.append("g");
-  const labelLayer = svg.append("g").attr("class", "labels");
   const pinLayer = svg.append("g");
 
   const projection = d3.geoNaturalEarth1();
@@ -64,7 +62,6 @@
   let coarse = null; // Länder grob (110m)
   let fine = null; // Länder fein (50m), wird nachgeladen
   let shownDetail = null;
-  let labels = []; // { code, id, lonlat, width } je Partnerland
   let width = 0;
   let height = 0;
   let lastWidth = null;
@@ -99,7 +96,6 @@
     graticule.attr("d", path(graticuleData));
     shownDetail = null;
     drawLand();
-    measureLabels();
     // Nur bei geänderter Breite neu ausrichten – auf dem Handy ändert sich
     // beim Scrollen der Adressleiste nur die Höhe, da bleibt der Zoom erhalten.
     if (width !== lastWidth) svg.call(zoom.transform, homeTransform());
@@ -136,89 +132,19 @@
       .attr("d", path);
   }
 
-  // Partnerländer bestimmen (das Land, in dem der Pin liegt) und Kürzel vorbereiten
+  // Partnerländer bestimmen (das Land, in dem der Pin liegt) und das
+  // Länderkürzel in die jeweilige Nadel schreiben
   function setupCountries(features) {
-    const byId = new Map();
+    partnerIds.clear();
     unis.forEach((u) => {
       const f = features.find((c) => d3.geoContains(c, [u.lng, u.lat]));
-      if (!f || byId.has(f.id)) return;
-      byId.set(f.id, u);
+      if (f) partnerIds.add(f.id);
+      u.code = (f && ISO2[f.id]) || String(u.land || "").slice(0, 2).toUpperCase();
     });
-    partnerIds.clear();
-    labels = [];
-    byId.forEach((u, id) => {
-      partnerIds.add(id);
-      const f = features.find((c) => c.id === id);
-      // Kürzel auf die größte Teilfläche setzen (z. B. Festland statt Inseln)
-      const polys = f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [f.geometry.coordinates];
-      const largest = polys
-        .map((coords) => ({ type: "Polygon", coordinates: coords }))
-        .sort((a, b) => area(b) - area(a))[0];
-      // Liegt der Mittelpunkt außerhalb (z. B. Norwegen → Schweden), steht
-      // das Kürzel stattdessen unter der ersten Pinnadel des Landes.
-      const center = d3.geoCentroid(largest);
-      const inside = d3.geoContains(largest, center);
-      labels.push({
-        id,
-        code: ISO2[id] || String(u.land || "").slice(0, 2).toUpperCase(),
-        geo: largest,
-        anchor: inside ? center : [u.lng, u.lat],
-        dy: inside ? 0 : 12,
-      });
-    });
-    measureLabels();
+    pins.select(".pin__code").text((u) => u.code);
   }
 
-  // Fläche einer Teilfläche; Ringe über die Datumsgrenze liefert geoArea
-  // manchmal "invertiert" (fast die ganze Erde) – dann die Gegenfläche nehmen.
-  function area(geo) {
-    const a = d3.geoArea(geo);
-    return Math.min(a, 4 * Math.PI - a);
-  }
-
-  function measureLabels() {
-    labels.forEach((l) => {
-      l.point = projection(l.anchor);
-      const [[x0], [x1]] = path.bounds(l.geo);
-      l.width = x1 - x0;
-    });
-    labelLayer
-      .selectAll("text")
-      .data(labels, (l) => l.id)
-      .join("text")
-      .attr("class", "map__code")
-      .text((l) => l.code);
-    placePins(false);
-  }
-
-  // Kürzel setzen: direkt am Land, sonst knapp daneben. Ist um das Land
-  // herum kein Platz frei (Pinnadeln oder andere Kürzel), wird es
-  // ausgeblendet und erscheint beim Hineinzoomen.
-  const LABEL_SPOTS = [[0, 0], [0, 14], [24, 0], [-24, 0], [0, -14], [24, 14], [-24, 14]];
-
-  function placeLabels(pinPos = []) {
-    const taken = [];
-    const hitsPin = (x, y) => pinPos.some(([px, py]) => Math.abs(px - x) < 22 && y > py - 40 && y < py + 9);
-    const hitsLabel = (x, y) => taken.some(([tx, ty]) => Math.abs(tx - x) < 26 && Math.abs(ty - y) < 14);
-    labelLayer.selectAll("text").each(function (l) {
-      let spot = null;
-      if (l.point && l.width * transform.k >= LABEL_MIN_WIDTH) {
-        const x0 = transform.applyX(l.point[0]);
-        const y0 = transform.applyY(l.point[1]) + l.dy;
-        spot = LABEL_SPOTS.map(([dx, dy]) => [x0 + dx, y0 + dy]).find(([x, y]) => !hitsPin(x, y) && !hitsLabel(x, y));
-      }
-      if (!spot) {
-        this.setAttribute("display", "none");
-        return;
-      }
-      taken.push(spot);
-      this.removeAttribute("display");
-      this.setAttribute("x", spot[0]);
-      this.setAttribute("y", spot[1]);
-    });
-  }
-
-  // Pins und Kürzel höchstens einmal pro Bild neu setzen
+  // Pins höchstens einmal pro Bild neu setzen
   let frame = null;
   function scheduleOverlay() {
     if (frame) return;
@@ -248,14 +174,16 @@
       }
     });
   pins.append("title").text((u) => `${u.name} – ${u.stadt}`);
-  // Pinnadel: Spitze liegt genau auf dem Standort (0,0), Kopf darüber.
-  pins.append("ellipse").attr("class", "pin__shadow").attr("rx", 5).attr("ry", 2);
+  // Pinnadel: Spitze liegt genau auf dem Standort (0,0), Kopf darüber;
+  // im Kopf steht das Länderkürzel.
+  pins.append("ellipse").attr("class", "pin__shadow").attr("rx", 6).attr("ry", 2.4);
   pins
     .append("path")
     .attr("class", "pin__head")
-    .attr("d", "M0 0C-1.5-6-10-11-10-19A10 10 0 1 1 10-19C10-11 1.5-6 0 0Z");
-  pins.append("circle").attr("class", "pin__eye").attr("cy", -19).attr("r", 4);
-  pins.append("rect").attr("x", -14).attr("y", -34).attr("width", 28).attr("height", 38).attr("fill", "transparent");
+    .attr("d", "M0 0C-1.8-7.2-13-13.5-13-23A13 13 0 1 1 13-23C13-13.5 1.8-7.2 0 0Z");
+  pins.append("circle").attr("class", "pin__eye").attr("cy", -23).attr("r", 9.5);
+  pins.append("text").attr("class", "pin__code").attr("y", -23);
+  pins.append("rect").attr("x", -16).attr("y", -40).attr("width", 32).attr("height", 44).attr("fill", "transparent");
 
   // Bildschirmposition jedes Pins; zu dicht liegende Pins (z. B. die zwei
   // Unis in Seoul) werden im Kreis um ihren Mittelpunkt verteilt.
@@ -275,14 +203,13 @@
     const pos = [];
     clusters.forEach((c) => {
       const n = c.members.length;
-      const radius = n === 1 ? 0 : Math.max(14, (n * 26) / (2 * Math.PI));
+      const radius = n === 1 ? 0 : Math.max(16, (n * 32) / (2 * Math.PI));
       c.members.forEach((m, k) => {
         const angle = (2 * Math.PI * k) / n - Math.PI / 2;
         pos[m] = [c.x + radius * Math.cos(angle), c.y + radius * Math.sin(angle)];
       });
     });
     pins.attr("transform", (u, i) => `translate(${pos[i][0]},${pos[i][1]})`);
-    placeLabels(pos);
     // Weiter unten liegende Nadeln überdecken die darüber liegenden
     pins.each((u, i) => (u.screenY = pos[i][1]));
     if (reorder) pins.sort((a, b) => a.screenY - b.screenY);
