@@ -303,7 +303,7 @@
     const city = String(u.stadt || "").replace(/[<>&"]/g, "");
     const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
       <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#f3dad8"/><stop offset="1" stop-color="#c0d6df"/></linearGradient></defs>
+        <stop offset="0" stop-color="#f7eeed"/><stop offset="1" stop-color="#c0d6df"/></linearGradient></defs>
       <rect width="640" height="360" fill="url(#g)"/>
       <g fill="none" stroke="#294936" stroke-opacity=".35" stroke-width="1.5">
         <path d="M120 300V150l80-60 80 60v150M280 300V110h120v190M400 300V170l60-40 60 40v130M80 300h480"/>
